@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
@@ -19,20 +19,31 @@ def process_page(url):
     jobs = []
     while url:
         soup = fetch_page(url)
-        job_posts = soup.find_all('div', class_='jobpost-cat-box')  # Adjusted to correct class
+        job_posts = soup.find_all('div', class_='jobpost-cat-box')
         if not job_posts:
             print("No job posts found.")
         for job in job_posts:
             title = job.find('h4').text.strip() if job.find('h4') else "No Title"
             description = job.find('div', class_='desc').text.strip() if job.find('div', class_='desc') else "No Description"
             posted_date = job.find('p', class_='fs-13').text.strip() if job.find('p', class_='fs-13') else "No Date Info"
+            
+            # Extract job type badge
+            job_type_badge = job.find('span', class_='badge')
+            job_type = job_type_badge.text.strip() if job_type_badge else "Not specified"
+            
+            # Extract skills
+            skills_div = job.find('div', class_='job-tag')
+            skills = [skill.text.strip() for skill in skills_div.find_all('a', class_='badge')] if skills_div else []
+            
             jobs.append({
                 'title': title,
                 'description': description,
-                'posted_date': posted_date
+                'posted_date': posted_date,
+                'job_type': job_type,
+                'skills': skills
             })
 
-        next_page_link = soup.find('a', string='Next')  # Assumes pagination control is present
+        next_page_link = soup.find('a', string='Next')
         if next_page_link:
             url = 'https://www.onlinejobs.ph' + next_page_link.get('href')
             print(f"Next page link found: {url}")
@@ -42,7 +53,8 @@ def process_page(url):
 
 @app.route('/jobs')
 def get_jobs():
-    start_url = 'https://www.onlinejobs.ph/jobseekers/jobsearch?jobkeyword=call+center'
+    query = request.args.get('query', 'call center')
+    start_url = f'https://www.onlinejobs.ph/jobseekers/jobsearch?jobkeyword={query}'
     jobs = process_page(start_url)
     return jsonify(jobs)
 
